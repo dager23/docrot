@@ -1,0 +1,105 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "docrot"
+version = "0.1.0.dev0"
+description = "Deterministic doc-to-code drift checker: finds references to symbols, paths, and commands in your docs that no longer resolve against your codebase."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Yash Shah" }]
+keywords = [
+    "documentation",
+    "drift",
+    "staleness",
+    "linter",
+    "ci",
+    "agents-md",
+    "claude-md",
+    "docs-as-code",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Documentation",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
+dependencies = [
+    "griffe>=1.0,<2",
+    "markdown-it-py>=3.0",
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.urls]
+Homepage = "https://github.com/yshah-afk/docrot"
+Changelog = "https://github.com/yshah-afk/docrot/blob/main/CHANGELOG.md"
+
+[project.scripts]
+docrot = "docrot.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "mypy>=1.10",
+    "ruff>=0.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/docrot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["docrot"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+mypy_path = "src"
+packages = ["docrot"]
+
+[[tool.mypy.overrides]]
+module = "griffe.*"
+follow_imports = "normal"
+
+[[tool.mypy.overrides]]
+module = "tomli"
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",      # pycodestyle/pyflakes
+    "I",                # isort
+    "UP",               # pyupgrade
+    "B",                # bugbear
+    "C4",               # comprehensions
+    "SIM",              # simplify
+    "RUF",
+]
+ignore = [
+    "SIM108",  # ternary preference — readability call left to authors
+]
+
+[tool.docrot]
+# docrot checks its own docs (dogfood).
+packages = ["docrot"]
