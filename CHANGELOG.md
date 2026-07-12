@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0] - 2026-07-12
 
 ### Added
 
@@ -35,10 +35,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deepening; `.pre-commit-hooks.yaml`; benchmark harness
   (`scripts/bench.py`).
 
-### Verified
+### Changed (during the benchmark campaign)
 
-- httpx (full history): 1 finding — `httpx.Mounts` documented with a full
-  example since 2024-02-14, never implemented in any commit. Confirmed
-  genuine upstream doc bug.
-- requests, flask (full history): 0 findings, 0 false positives across
-  501 checked references.
+- Agent context files (CLAUDE.md, AGENTS.md, .claude/*.md, copilot
+  instructions) are checked even when untracked or gitignored — agents
+  read them regardless.
+- Historical resolution no longer uses grep-evidence fallback for
+  module-rooted references: "a def of that name existed somewhere" is not
+  "resolved as written" (rich.ScreenContext.update lesson).
+- Inline spans followed by an ellipsis ("start typing `typer.File`...")
+  are intentional prefixes, never symbol claims.
+- Explicit markdown links get no bare-filename exemption: a link is a
+  concrete claim that its target exists.
+- ASCII-only console output (Windows cp1252 terminals).
+
+### Verified (see BENCHMARKS.md)
+
+Nine-repo full-history benchmark (httpx, requests, flask, click,
+starlette, rich, typer, pydantic, anthropic-sdk-python): ~4,880
+references checked, 4 findings, all four manually confirmed as genuine
+documentation defects (httpx.Mounts never existed;
+rich.ScreenContext.update and rich.console.Print.print ×2 are broken
+Sphinx roles that never resolved). 0 false positives.

@@ -88,6 +88,15 @@ class TestCommandClassification:
         assert kind_of("a|b") is None
 
 
+class TestEllipsisPrefix:
+    def test_ellipsis_span_is_not_a_claim(self) -> None:
+        # "start typing `typer.File`..." (typer docs) — intentional prefix
+        from docrot.model import SpanContext
+
+        span = RawSpan(DOC, 1, 1, "typer.File", SpanContext(ellipsis_after=True))
+        assert classify(span, frozenset()) is None
+
+
 class TestForeignLanguageNoise:
     def test_js_callforms_are_callform_class(self) -> None:
         # These classify as SYMBOL_CALL but resolution keeps them UNKNOWN

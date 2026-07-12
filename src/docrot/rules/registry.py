@@ -240,7 +240,7 @@ def judge(
             resolution,
             confidence,
             evidence if history == "confirmed" else None,
-            message=f"`{ref.target}` — `{unit}` is not a known {runner} target",
+            message=f"`{ref.target}`: `{unit}` is not a known {runner} target",
         )
 
     return None

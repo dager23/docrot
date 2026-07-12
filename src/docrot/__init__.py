@@ -10,7 +10,7 @@ from pathlib import Path
 
 from docrot.model import Finding, Report
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"
 
 __all__ = ["Finding", "Report", "__version__", "check"]
 

@@ -60,6 +60,23 @@ class TestSymbolDrift:
         assert evidence is not None
         assert not evidence.resolved_at_introduction
 
+    def test_unexported_class_never_resolved_as_written(self, git_repo: GitRepo) -> None:
+        # rich.ScreenContext.update lesson: the class exists in a submodule
+        # but was never importable from the package root — "resolves as
+        # written" must be False, with no grep-evidence shortcut.
+        git_repo.commit(
+            {
+                "pkg/__init__.py": "\n",
+                "pkg/core.py": ("class Screen:\n    def update(self):\n        pass\n"),
+                "README.md": "Call :meth:`~pkg.Screen.update`.\n",
+            },
+            "class never exported from package root",
+        )
+        gate = make_gate(git_repo, {"pkg": "pkg"})
+        evidence = gate.examine(ref("pkg.Screen.update", RefKind.SYMBOL_DOTTED), "pkg")
+        assert evidence is not None
+        assert not evidence.resolved_at_introduction
+
     def test_uncommitted_line_no_evidence(self, git_repo: GitRepo) -> None:
         git_repo.commit({"pkg/__init__.py": "\n", "README.md": "one line\n"}, "init")
         (git_repo.root / "README.md").write_text(

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "docrot"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Deterministic doc-to-code drift checker: finds references to symbols, paths, and commands in your docs that no longer resolve against your codebase."
 readme = "README.md"
 requires-python = ">=3.10"

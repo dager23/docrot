@@ -107,11 +107,17 @@ def extract_markdown(doc: Path, text: str, in_agent_file: bool) -> Extracted:
     for lineno0, line in enumerate(lines):
         if masked[lineno0]:
             continue
-        ctx = SpanContext(headings.at(lineno0), in_agent_file)
+        base_ctx = SpanContext(headings.at(lineno0), in_agent_file)
         for m in _INLINE_CODE.finditer(line):
             body = m.group("body").strip()
             if not body:
                 continue
+            following = line[m.end() :].lstrip("`")
+            ctx = base_ctx
+            if following.startswith(("...", "…")):
+                ctx = SpanContext(
+                    base_ctx.heading_path, base_ctx.in_agent_file, ellipsis_after=True
+                )
             if _PROMPT.match(body):
                 command_lines.append(
                     RawSpan(doc, lineno0 + 1, m.start("body") + 1, _PROMPT.sub("", body), ctx)

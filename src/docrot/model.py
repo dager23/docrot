@@ -59,6 +59,7 @@ class SpanContext:
     heading_path: tuple[str, ...] = ()
     in_agent_file: bool = False
     fence_lang: str | None = None
+    ellipsis_after: bool = False  # `typer.File`... = intentional prefix, not a claim
 
 
 @dataclass(frozen=True)

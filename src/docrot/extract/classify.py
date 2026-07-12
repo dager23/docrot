@@ -88,6 +88,9 @@ def classify(span: RawSpan, entry_points: frozenset[str]) -> Reference | None:
     if text.endswith(_FILE_FIRST_EXT) and not text.startswith("."):
         return Reference(span, RefKind.PATH, text)
 
+    if span.context.ellipsis_after:
+        # "start typing `typer.File`..." — an intentional prefix, not a claim
+        return None
     if _DOTTED.match(text):
         return Reference(span, RefKind.SYMBOL_DOTTED, text.lstrip("~").removesuffix("()"))
     if _CALLFORM.match(text):

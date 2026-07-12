@@ -79,6 +79,26 @@ def discover_docs(config: Config, git: Git) -> list[str]:
             continue
         selected.append(rel)
 
+    # Agent context files are consumed by agents whether or not they are
+    # tracked (often they're brand new, or even gitignored) — include any
+    # present on disk that the tracked scan missed.
+    present = set(selected)
+    for name in AGENT_FILE_NAMES:
+        if name not in present and (config.root / name).is_file():
+            selected.append(name)
+            present.add(name)
+    for extra in (".github/copilot-instructions.md",):
+        if extra not in present and (config.root / extra).is_file():
+            selected.append(extra)
+            present.add(extra)
+    claude_dir = config.root / ".claude"
+    if claude_dir.is_dir():
+        for p in sorted(claude_dir.rglob("*.md")):
+            rel = p.relative_to(config.root).as_posix()
+            if rel not in present:
+                selected.append(rel)
+                present.add(rel)
+
     if config.changed_only and git.available:
         changed = git.changed_files()
         selected = [r for r in selected if r in changed]

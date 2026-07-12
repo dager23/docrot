@@ -133,6 +133,17 @@ def test_no_temporal_mode_degrades(drifted_repo: GitRepo) -> None:
     assert "PY001" in rules
 
 
+def test_untracked_agent_file_still_checked(drifted_repo: GitRepo) -> None:
+    # agents read CLAUDE.md whether or not it's committed
+    (drifted_repo.root / "CLAUDE.md").write_text(
+        "Logic is in `demo/gone_dir/nothing.py`.\n", encoding="utf-8"
+    )
+    report = docrot.check(drifted_repo.root)
+    assert any(
+        f.rule == "AG002" and f.ref.target == "demo/gone_dir/nothing.py" for f in report.findings
+    )
+
+
 def test_explain_and_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["explain", "PY002"]) == 0
     out = capsys.readouterr().out

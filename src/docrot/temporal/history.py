@@ -219,8 +219,14 @@ class HistoricalResolver:
                             self._member_in_class(commit, src, rest[0], rest[1])
                         ):
                             return True
-                # deeper chains: fall through to grep evidence below
-            return self._grep_definition(commit, parts[-1])
+                # deeper chains than module.Class.member: unsupported, treat
+                # as unresolved-then (strict gate)
+            # Module-rooted references get NO grep fallback: the structured
+            # walk is authoritative for "resolves as written". Grep evidence
+            # ("a def of that name existed somewhere") conflates existence
+            # with addressability and mislabels never-valid references
+            # (rich.ScreenContext.update lesson).
+            return False
 
         # class-scoped / bare references: definition-level grep evidence
         return self._grep_definition(commit, parts[-1], class_hint=head)
