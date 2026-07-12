@@ -1,0 +1,14 @@
+# Use in downstream repos:
+#
+#   repos:
+#     - repo: https://github.com/yshah-afk/docrot
+#       rev: v0.1.0
+#       hooks:
+#         - id: docrot
+- id: docrot
+  name: docrot (doc-to-code drift)
+  description: Flags doc references to symbols, paths, and commands that no longer resolve.
+  entry: docrot check --changed-only
+  language: python
+  pass_filenames: false
+  types_or: [markdown, rst]

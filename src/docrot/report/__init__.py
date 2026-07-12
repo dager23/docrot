@@ -36,7 +36,7 @@ def render_text(report: Report, out: TextIO = sys.stdout, show_unknown: bool = F
             if ev.resolved_at_introduction:
                 line += " when it still resolved"
             if ev.broken_since:
-                line += f" · broken since {ev.broken_since.short}"
+                line += f" | broken since {ev.broken_since.short}"
                 if ev.broken_since.date:
                     line += f" ({ev.broken_since.date})"
             out.write(line + "\n")
@@ -58,14 +58,14 @@ def render_text(report: Report, out: TextIO = sys.stdout, show_unknown: bool = F
 
     s = report.summary
     out.write(
-        f"\ndocrot: {s.refs} references · {s.resolved} resolved · "
-        f"{s.unknown} unknown (skipped) · {s.findings} findings"
+        f"\ndocrot: {s.refs} references | {s.resolved} resolved | "
+        f"{s.unknown} unknown (skipped) | {s.findings} findings"
     )
     if s.by_severity:
         parts = ", ".join(f"{n} {sev}" for sev, n in sorted(s.by_severity.items()))
         out.write(f" ({parts})")
     if s.suppressed:
-        out.write(f" · {s.suppressed} suppressed")
+        out.write(f" | {s.suppressed} suppressed")
     out.write("\n")
 
 

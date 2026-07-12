@@ -248,15 +248,17 @@ class HistoricalResolver:
                 return True
         return False
 
-    def path_resolved_at(self, commit: str, target: str) -> bool:
+    def path_resolved_at(self, commit: str, target: str, exact: bool = False) -> bool:
         if self.git.exists_at(commit, target):
             return True
+        if exact:
+            return False
         basename = target.rsplit("/", 1)[-1]
         return any(p.rsplit("/", 1)[-1] == basename for p in self.git.tree_paths(commit))
 
-    def resolved_at(self, commit: str, ref: Reference) -> bool:
+    def resolved_at(self, commit: str, ref: Reference, exact_path: bool = False) -> bool:
         if ref.kind in (RefKind.SYMBOL_DOTTED, RefKind.SYMBOL_CALL):
             return self.symbol_resolved_at(commit, ref.target)
         if ref.kind in (RefKind.PATH, RefKind.LINK):
-            return self.path_resolved_at(commit, ref.target)
+            return self.path_resolved_at(commit, ref.target, exact=exact_path)
         return False

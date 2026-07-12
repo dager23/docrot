@@ -95,11 +95,27 @@ def _read_toml(path: Path) -> dict[str, Any]:
 
 
 def _package_dir(root: Path, name: str) -> Path | None:
+    """Locate the package directory, returning its *true on-disk casing*.
+
+    PyPI names are often capitalized ("Flask") while import names are not;
+    on case-insensitive filesystems a naive `base / name` check would
+    "find" src/Flask and poison the whole symbol index with a package
+    named Flask that git (case-sensitive) can never see.
+    """
     mod = name.replace("-", "_")
     for base in (root, root / "src"):
-        candidate = base / mod
-        if (candidate / "__init__.py").is_file():
-            return candidate
+        if not (base / mod / "__init__.py").is_file():
+            continue
+        try:
+            entries = list(base.iterdir())
+        except OSError:
+            return base / mod
+        for child in entries:  # exact case first
+            if child.name == mod and (child / "__init__.py").is_file():
+                return child
+        for child in entries:  # true-case fallback (Flask -> flask)
+            if child.name.lower() == mod.lower() and (child / "__init__.py").is_file():
+                return child
     return None
 
 
@@ -129,12 +145,13 @@ def discover_packages(config: Config) -> list[PackageRoot]:
     seen: set[str] = set()
     for name in names:
         mod = name.replace("-", "_")
-        if mod in seen:
+        if mod.lower() in seen:
             continue
         path = _package_dir(root, mod)
         if path is not None:
-            roots.append(PackageRoot(mod, path))
-            seen.add(mod)
+            # the directory's true name is the import name
+            roots.append(PackageRoot(path.name, path))
+            seen.add(path.name.lower())
 
     if not roots:
         # last resort: scan for top-level packages

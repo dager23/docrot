@@ -61,7 +61,9 @@ class PythonResolver:
             if isinstance(mod, griffe.Module):
                 self._modules[name] = mod
         with contextlib.suppress(Exception):
-            loader.resolve_aliases(implicit=False, external=False)
+            # implicit=True: internal imports like `from .sansio.app import
+            # App` must resolve or base-class walks (Flask -> App) go blind
+            loader.resolve_aliases(implicit=True, external=False)
 
         for mod in self._modules.values():
             self._walk_index(mod)
@@ -218,9 +220,14 @@ class PythonResolver:
         mro_incomplete = False
         if isinstance(obj, griffe.Class):
             try:
-                for base in obj.mro():
+                mro = list(obj.mro())
+                for base in mro:
                     for k, v in base.members.items():
                         members.setdefault(k, v)
+                # griffe returns an empty mro instead of raising when base
+                # expressions can't be resolved — that's incomplete, not final
+                if obj.bases and not mro:
+                    mro_incomplete = True
             except Exception:
                 mro_incomplete = True
 

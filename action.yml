@@ -1,0 +1,47 @@
+name: docrot
+description: >-
+  Deterministic doc-to-code drift check: flags references to symbols, paths,
+  and commands in your docs that no longer resolve against the codebase.
+branding:
+  icon: file-text
+  color: orange
+
+inputs:
+  args:
+    description: Extra arguments passed to `docrot check`
+    default: ""
+  sarif:
+    description: Upload findings as SARIF code-scanning annotations (true/false)
+    default: "true"
+  python-version:
+    description: Python version to run docrot with
+    default: "3.12"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Ensure full history (temporal gate)
+      shell: bash
+      run: |
+        if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+          git fetch --unshallow --quiet || git fetch --deepen=1000 --quiet || true
+        fi
+    - name: Install docrot
+      shell: bash
+      run: python -m pip install --quiet docrot
+    - name: Run docrot (annotations)
+      shell: bash
+      run: python -m docrot.cli check --format github ${{ inputs.args }}
+    - name: Generate SARIF
+      if: ${{ always() && inputs.sarif == 'true' }}
+      shell: bash
+      run: python -m docrot.cli check --format sarif ${{ inputs.args }} > docrot.sarif || true
+    - name: Upload SARIF
+      if: ${{ always() && inputs.sarif == 'true' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: docrot.sarif
+        category: docrot

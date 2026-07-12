@@ -32,6 +32,10 @@ class PathResolver:
             for i in range(1, len(parts)):
                 self._dirs.add("/".join(parts[:i]))
 
+    def has(self, target: str) -> bool:
+        """Exact tracked-file or directory existence."""
+        return target in self.tracked or target in self._dirs
+
     def resolve(self, ref: Reference) -> Resolution:
         target = ref.target.rstrip("/")
         if not target:
@@ -44,9 +48,13 @@ class PathResolver:
 
         basename = target.rsplit("/", 1)[-1]
         matches = self._by_basename.get(basename, [])
-        if matches:
+        if len(matches) == 1:
             note = "basename" if "/" in target else "bare-basename"
             return Resolution(ref, Verdict.RESOLVED, resolved_as=matches[0], boundary=note)
+        if len(matches) > 1:
+            # several unrelated files share this basename: any "found at"
+            # suggestion would be a guess (htmlcov/index.html lesson)
+            return Resolution(ref, Verdict.UNKNOWN, boundary="ambiguous-basename")
 
         if "/" not in target:
             # Bare filename that matches nothing: could be a file the

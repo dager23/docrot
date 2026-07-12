@@ -47,10 +47,10 @@ class TemporalGate:
             return None
         return entry
 
-    def _resolved_at(self, commit: str, ref: Reference) -> bool:
+    def _resolved_at(self, commit: str, ref: Reference, exact_path: bool = False) -> bool:
         if ref.kind == RefKind.COMMAND:
             return self._command_resolved_at(commit, ref)
-        return self.history.resolved_at(commit, ref)
+        return self.history.resolved_at(commit, ref, exact_path=exact_path)
 
     def _command_resolved_at(self, commit: str, ref: Reference) -> bool:
         inv = self._inv_cache.get(commit)
@@ -80,7 +80,9 @@ class TemporalGate:
         check = check_command(ref.target, inv, None, self.git.tree_paths(commit))
         return check.verdict is Verdict.RESOLVED
 
-    def _broken_since(self, intro_sha: str, ref: Reference, scope: str | None) -> CommitRef | None:
+    def _broken_since(
+        self, intro_sha: str, ref: Reference, scope: str | None, exact_path: bool = False
+    ) -> CommitRef | None:
         if not self.bisect:
             return None
         commits = self.git.first_parent_commits(intro_sha, scope)
@@ -90,18 +92,20 @@ class TemporalGate:
         lo, hi = 0, len(commits) - 1
         first_bad: str | None = None
         # verify the endpoint actually fails before bisecting a large range
-        if self._resolved_at(commits[hi], ref):
+        if self._resolved_at(commits[hi], ref, exact_path):
             return None  # broken only in uncommitted state
         while lo <= hi:
             mid = (lo + hi) // 2
-            if self._resolved_at(commits[mid], ref):
+            if self._resolved_at(commits[mid], ref, exact_path):
                 lo = mid + 1
             else:
                 first_bad = commits[mid]
                 hi = mid - 1
         return self._commit_ref(first_bad) if first_bad else None
 
-    def examine(self, ref: Reference, scope: str | None) -> TemporalEvidence | None:
+    def examine(
+        self, ref: Reference, scope: str | None, exact_path: bool = False
+    ) -> TemporalEvidence | None:
         """Evidence for a currently-BROKEN reference, or None without history.
 
         `scope` narrows the bisection walk to commits touching a path
@@ -111,13 +115,13 @@ class TemporalGate:
         if intro is None:
             return None
         sha, date = intro
-        resolved_then = self._resolved_at(sha, ref)
+        resolved_then = self._resolved_at(sha, ref, exact_path)
         evidence = TemporalEvidence(
             introduced_at=CommitRef(sha, date or self.git.commit_date(sha)),
             resolved_at_introduction=resolved_then,
         )
         if resolved_then:
-            broken = self._broken_since(sha, ref, scope)
+            broken = self._broken_since(sha, ref, scope, exact_path)
             if broken is not None:
                 evidence = TemporalEvidence(
                     introduced_at=evidence.introduced_at,

@@ -39,6 +39,7 @@ def drifted_repo(git_repo: GitRepo) -> GitRepo:
                 "```\n\n"
                 "For tutorials, create a `views.py` file (never in repo).\n"
                 "External stuff like `numpy.array` is not ours.\n"
+                "Enable turbo with `demo.enable_turbo()` (never implemented).\n"
             ),
             "AGENTS.md": (
                 "# Agent notes\n\nCore logic is in `demo/core.py`. Run `make test` after edits.\n"
@@ -64,6 +65,8 @@ def test_finds_exactly_the_real_drift(drifted_repo: GitRepo) -> None:
     rules = {(f.rule, f.ref.target) for f in report.findings if not f.suppressed}
     assert ("PY002", "demo.make_widget") in rules
     assert ("AG001", "make release") in rules
+    # documented API that never shipped (the httpx.Mounts case)
+    assert ("PY003", "demo.enable_turbo") in rules
 
     targets = [f.ref.target for f in report.findings]
     # fiction and externals never flagged

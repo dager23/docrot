@@ -78,9 +78,10 @@ def classify(span: RawSpan, entry_points: frozenset[str]) -> Reference | None:
     if _SHELL_META.search(text):
         return None
 
-    # Path-first for unambiguous file spans.
-    if "/" in text or "\\" in text:
-        norm = text.replace("\\", "/").strip("./")
+    # Path-first for unambiguous file spans (parens mean regex/pseudo-code,
+    # never a repo path).
+    if ("/" in text or "\\" in text) and "(" not in text:
+        norm = _normalize_path(text)
         if not norm or " " in norm:
             return None
         return Reference(span, RefKind.PATH, norm)
@@ -101,6 +102,15 @@ def classify(span: RawSpan, entry_points: frozenset[str]) -> Reference | None:
     return None
 
 
+def _normalize_path(text: str) -> str:
+    """POSIX separators; strip only a leading `./` and trailing `/` —
+    never dot-directories like `.github`."""
+    norm = text.replace("\\", "/")
+    while norm.startswith("./"):
+        norm = norm[2:]
+    return norm.rstrip("/")
+
+
 def classify_command(span: RawSpan) -> Reference | None:
     text = " ".join(span.text.split())
     if not text:
@@ -109,7 +119,7 @@ def classify_command(span: RawSpan) -> Reference | None:
 
 
 def classify_link(span: RawSpan) -> Reference:
-    return Reference(span, RefKind.LINK, span.text.replace("\\", "/").lstrip("./"))
+    return Reference(span, RefKind.LINK, _normalize_path(span.text))
 
 
 def path_fallback_eligible(ref: Reference) -> bool:

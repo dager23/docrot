@@ -178,6 +178,15 @@ class Git:
         )
         return proc.returncode == 0 and bool(proc.stdout.strip())
 
+    def grep_worktree(self, fixed_string: str, path: str) -> bool:
+        """True when `fixed_string` occurs in tracked files under `path`."""
+        proc = subprocess.run(
+            ["git", "grep", "-l", "--fixed-strings", fixed_string, "--", path],
+            cwd=self.root,
+            capture_output=True,
+        )
+        return proc.returncode == 0 and bool(proc.stdout.strip())
+
     def first_parent_commits(self, since: str, path: str | None = None) -> list[str]:
         """Commits from `since` (exclusive) to HEAD, oldest first."""
         args = ["rev-list", "--first-parent", "--reverse", f"{since}..HEAD"]

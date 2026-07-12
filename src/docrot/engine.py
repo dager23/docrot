@@ -116,11 +116,33 @@ def run_check(config: Config) -> Report:
             elif resolution.verdict is Verdict.UNKNOWN:
                 unknowns.append(resolution)
 
+            if (
+                resolution.verdict is Verdict.BROKEN
+                and ref.kind is RefKind.SYMBOL_DOTTED
+                and git.available
+                and _is_runtime_identifier(ref.target, git, pkg_dirs)
+            ):
+                # the code itself uses this dotted name as a *string* (entry
+                # point group, config key, event name): not a symbol claim
+                resolution = Resolution(ref, Verdict.UNKNOWN, boundary="string-literal")
+                unknowns.append(resolution)
+
             history: History = "unavailable"
             evidence = None
             if resolution.verdict is Verdict.BROKEN and gate is not None:
                 scope = _scope_for(ref, pkg_dirs)
                 evidence = gate.examine(ref, scope)
+                if evidence is not None:
+                    history = "confirmed" if evidence.resolved_at_introduction else "refuted"
+            elif (
+                resolution.verdict is Verdict.RESOLVED
+                and resolution.boundary == "basename"
+                and "/" in ref.target
+                and gate is not None
+            ):
+                # unique-basename relocation: PATH002 only when the documented
+                # location provably existed (file moved, docs didn't)
+                evidence = gate.examine(ref, None, exact_path=True)
                 if evidence is not None:
                     history = "confirmed" if evidence.resolved_at_introduction else "refuted"
 
@@ -192,11 +214,40 @@ def _resolve(
                     boundary="as-path",
                 )
         return resolution
-    if ref.kind in (RefKind.PATH, RefKind.LINK):
+    if ref.kind is RefKind.LINK:
+        # markdown links resolve relative to the containing document first
+        normalized = _normalize_dots(ref.doc.parent, ref.target)
+        if normalized is not None and paths.has(normalized):
+            return Resolution(ref, Verdict.RESOLVED, resolved_as=normalized)
+        return paths.resolve(ref)
+    if ref.kind is RefKind.PATH:
         return paths.resolve(ref)
     if ref.kind is RefKind.COMMAND:
         return commands.resolve(ref)
     return Resolution(ref, Verdict.UNKNOWN, boundary="unclassified")
+
+
+def _normalize_dots(base: Path, target: str) -> str | None:
+    """Join and normalize `target` against `base` without touching the fs."""
+    parts: list[str] = list(base.parts)
+    for piece in target.split("/"):
+        if piece in ("", "."):
+            continue
+        if piece == "..":
+            if not parts:
+                return None
+            parts.pop()
+        else:
+            parts.append(piece)
+    return "/".join(parts) if parts else None
+
+
+def _is_runtime_identifier(target: str, git: Git, pkg_dirs: dict[str, str]) -> bool:
+    for pkg_dir in pkg_dirs.values():
+        for quoted in (f'"{target}"', f"'{target}'"):
+            if git.grep_worktree(quoted, pkg_dir):
+                return True
+    return False
 
 
 def _scope_for(ref: Reference, pkg_dirs: dict[str, str]) -> str | None:

@@ -46,6 +46,22 @@ class TestPathResolver:
         assert res.verdict is Verdict.RESOLVED
         assert res.resolved_as == "src/mypkg/auth.py"
 
+    def test_ambiguous_basename_unknown(self) -> None:
+        # several unrelated files share the basename: any suggestion is a guess
+        tracked = self.TRACKED | {"docs/index.html", "site/admin/index.html"}
+        r = PathResolver(frozenset(tracked))
+        res = r.resolve(pref("htmlcov/index.html"))
+        assert res.verdict is Verdict.UNKNOWN
+        assert res.boundary == "ambiguous-basename"
+
+    def test_dot_directory_preserved(self) -> None:
+        from docrot.extract.classify import classify
+        from docrot.model import RawSpan
+
+        ref = classify(RawSpan(DOC, 1, 1, ".github/AI_POLICY.md"), frozenset())
+        assert ref is not None
+        assert ref.target == ".github/AI_POLICY.md"
+
     def test_placeholder_unknown(self) -> None:
         r = PathResolver(self.TRACKED)
         assert r.resolve(pref("path/to/config.py")).verdict is Verdict.UNKNOWN

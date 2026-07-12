@@ -101,5 +101,8 @@ ignore = [
 ]
 
 [tool.docrot]
-# docrot checks its own docs (dogfood).
+# docrot checks its own docs (dogfood). The two design documents reference
+# illustrative and other-repo paths by design — they document history and
+# plans, not this repo's current state.
 packages = ["docrot"]
+exclude_docs = ["PLAN.md", "research-deliverable.md"]

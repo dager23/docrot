@@ -51,6 +51,12 @@ RULES: dict[str, RuleSpec] = {
             Severity.ERROR,
             "Symbol resolved when the doc line was written and no longer does",
         ),
+        RuleSpec(
+            "PY003",
+            "core",
+            Severity.ERROR,
+            "Documented own-package symbol has never existed (docs promise API that never shipped)",
+        ),
         RuleSpec("PATH001", "core", Severity.ERROR, "Documented path is missing from the tree"),
         RuleSpec(
             "PATH002",
@@ -128,14 +134,20 @@ def judge(
     in_agent = ref.span.context.in_agent_file
 
     if resolution.verdict is Verdict.RESOLVED:
-        if kind in (RefKind.PATH, RefKind.LINK) and resolution.boundary == "basename":
+        if (
+            kind in (RefKind.PATH, RefKind.LINK)
+            and resolution.boundary == "basename"
+            and history == "confirmed"
+        ):
+            # the documented location really existed and the file moved
             return _make(
                 "PATH002",
                 config,
                 resolution,
                 Confidence.HIGH,
-                message=f"`{ref.target}` found at `{resolution.resolved_as}`, "
-                "not at the documented location",
+                evidence,
+                message=f"`{ref.target}` moved to `{resolution.resolved_as}`; "
+                "docs still point at the old location",
                 suggestion=resolution.resolved_as,
             )
         return None
@@ -154,6 +166,18 @@ def judge(
                 Confidence.HIGH,
                 evidence,
                 message=f"`{ref.target}` no longer resolves",
+            )
+        if history == "refuted" and local_symbol:
+            # Own-package namespace is fully analyzed both now and then:
+            # the docs promise an API that never shipped (the httpx.Mounts
+            # case). Precision rests on Gate 2, the strong gate.
+            return _make(
+                "PY003",
+                config,
+                resolution,
+                Confidence.HIGH,
+                evidence,
+                message=f"`{ref.target}` is documented but has never existed",
             )
         if history == "unavailable" and local_symbol:
             return _make(
@@ -178,8 +202,11 @@ def judge(
         return None
 
     if kind in (RefKind.PATH, RefKind.LINK):
-        if resolution.boundary == "bare" and history != "confirmed":
-            return None  # bare filename that never existed: reader-creates-it
+        if kind is RefKind.PATH and resolution.boundary == "bare" and history != "confirmed":
+            # bare inline-code filename that never existed: reader-creates-it.
+            # Explicit markdown *links* get no such exemption — a link is a
+            # concrete claim that the target exists.
+            return None
         if history == "confirmed":
             rule = "AG002" if in_agent else ("LINK001" if kind is RefKind.LINK else "PATH001")
             return _make(
