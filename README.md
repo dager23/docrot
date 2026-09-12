@@ -17,7 +17,7 @@ $ docrot
 docs/advanced/transports.md:178:53  PY003 error  `httpx.Mounts` is documented but has never existed
     written at 3faa4a8 (2024-02-14)
 
-docrot: 187 references | 82 resolved | 86 unknown (skipped) | 1 findings (1 error)
+docrot: 187 references | 82 resolved | 85 unknown (skipped) | 1 findings (1 error)
 ```
 
 That output is real: on its first run against [httpx](https://github.com/encode/httpx)
@@ -67,9 +67,10 @@ checkouts), and only then decides:
 | no  | no | fiction (a file the *reader* creates, pseudo-code) — silent |
 | no, and it's your own package's namespace | no | **documented API that never shipped** — reported |
 
-The result on real repositories: requests **0 findings**, flask **0
-findings**, httpx **1 finding — a real bug** (688 references checked in
-total, a few seconds per repo).
+The result on these three: requests **0 findings**, flask **0
+findings**, httpx **1 finding, a real bug** (709 references checked in
+total, a few seconds per repository). The full corpus run is in
+[BENCHMARKS.md](BENCHMARKS.md).
 
 ## Install & run
 

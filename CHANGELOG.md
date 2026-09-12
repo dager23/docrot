@@ -4,56 +4,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2026-07-12
+## [0.1.0] - 2026-09-12
+
+First release.
 
 ### Added
 
-- Two-gate drift detection engine: griffe-backed tri-state symbol
-  resolution (RESOLVED/BROKEN/UNKNOWN) plus a git temporal gate that
-  separates drift (resolved when written, broken now) from fiction
-  (never resolved), with commit provenance and breaking-commit bisection.
-- Reference extraction from Markdown (markdown-it-py), reStructuredText
-  (inline literals + Sphinx roles), and agent context files
-  (CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, copilot instructions).
-- Rules: PY001/PY002/PY003 (symbols, including documented-but-never-shipped
-  APIs), PATH001/PATH002 (paths, move detection with exact-location history
-  confirmation), LINK001 (doc-relative markdown links), CALL001 (bare
-  call-forms), AG001 (make/tox/nox/poe/pdm/npm/pnpm/yarn/just/entry-point/
-  `python -m`/pytest command targets), AG002 (agent-file paths),
-  AN001/AN002 (opt-in AST-normalized hash anchors).
-- Precision gates hardened on real repositories: true-case package
-  detection (Flask/flask on case-insensitive filesystems), implicit alias
-  resolution for base-class walks, empty-MRO-with-declared-bases treated
-  as incomplete, unique-basename-only relocation matching, dot-directory
-  path normalization (`.github/...`), runtime-identifier string-literal
-  gate (entry-point groups like `flask.commands` are not symbol claims).
-- Output formats: text, JSON (schema v1), SARIF 2.1.0, GitHub workflow
-  commands; inline suppressions with accounting; `docrot explain <RULE>`.
-- Zero-config discovery (packages from pyproject, tracked docs via git),
-  `--changed-only` pre-commit mode, `--strict`, `--show-unknown`.
-- GitHub Action (`action.yml`) with SARIF upload and shallow-clone
-  deepening; `.pre-commit-hooks.yaml`; benchmark harness
-  (`scripts/bench.py`).
+- Two-gate drift detection. Symbol resolution is backed by
+  [griffe](https://github.com/mkdocstrings/griffe) and returns a tri-state
+  verdict, where `UNKNOWN` never becomes a finding: star-import re-exports,
+  alias chains, class inheritance and instance attributes all resolve, and
+  anything dynamic degrades to silence rather than noise. A git temporal
+  gate then separates drift (resolved when the line was written, broken
+  now) from fiction (never resolved), and bisects the commit where a
+  reference broke so every finding carries provenance.
+- Reference extraction from Markdown, reStructuredText and agent context
+  files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, Copilot
+  instructions, `.claude/**`), the last of which are checked even when
+  untracked, because agents read them regardless.
+- Rules `PY001`/`PY002`/`PY003` for symbols, `PATH001`/`PATH002` for paths,
+  `LINK001` for relative links, `CALL001` for bare call forms,
+  `AG001`/`AG002` for commands and agent-file paths, and the opt-in
+  `AN001`/`AN002` anchors, which bind prose to an AST-normalized hash of a
+  symbol body so formatting churn does not invalidate it.
+- Command validation across make, tox, nox, poe, pdm, npm, pnpm, yarn,
+  just, console entry points, `python -m` and pytest paths.
+- Output as text, JSON (schema 1), SARIF 2.1.0 and GitHub workflow
+  commands; inline suppressions that are counted rather than silent;
+  `docrot explain`; zero-config discovery; `--changed-only` for pre-commit.
+- A GitHub Action with SARIF upload and shallow-clone deepening, a
+  pre-commit hook, and a corpus harness (`scripts/corpus_check.py`) that
+  seeds true positives and true negatives from facts about real projects.
 
-### Changed (during the benchmark campaign)
+### Verified
 
-- Agent context files (CLAUDE.md, AGENTS.md, .claude/*.md, copilot
-  instructions) are checked even when untracked or gitignored — agents
-  read them regardless.
-- Historical resolution no longer uses grep-evidence fallback for
-  module-rooted references: "a def of that name existed somewhere" is not
-  "resolved as written" (rich.ScreenContext.update lesson).
-- Inline spans followed by an ellipsis ("start typing `typer.File`...")
-  are intentional prefixes, never symbol claims.
-- Explicit markdown links get no bare-filename exemption: a link is a
-  concrete claim that its target exists.
-- ASCII-only console output (Windows cp1252 terminals).
+See [BENCHMARKS.md](BENCHMARKS.md) for the measured corpus run. Confirmed
+findings in real projects include `httpx.Mounts`, documented with a
+complete usage example since 2024 and never implemented in any commit, and
+two broken Sphinx cross-references in rich.
 
-### Verified (see BENCHMARKS.md)
+### Notes on precision
 
-Nine-repo full-history benchmark (httpx, requests, flask, click,
-starlette, rich, typer, pydantic, anthropic-sdk-python): ~4,880
-references checked, 4 findings, all four manually confirmed as genuine
-documentation defects (httpx.Mounts never existed;
-rich.ScreenContext.update and rich.console.Print.print ×2 are broken
-Sphinx roles that never resolved). 0 false positives.
+Several classes of false positive were found by running against real
+repositories and are now regression-tested:
+
+- `PY003` claims a symbol never existed, which must be provable. Probing
+  only the doc line's introduction commit reported symbols removed *before*
+  the line was written as never having existed - on anthropic-sdk-python
+  that produced 13 false positives in `MIGRATION.md`. Absence is now proven
+  across history, and migration, upgrade and porting guides join changelogs
+  as documents whose purpose is to name removed APIs.
+- Names like `settings.json` parse as dotted symbols. Symbol resolution is
+  tried first, which is what keeps `Response.json` from being mistaken for
+  a file, but such references now continue to the temporal gate as path
+  candidates so a deleted documented file is still caught.
+- reStructuredText roles of the form ``:meth:`text <pkg.real.target>` ``
+  were extracting the display text instead of the target.
+- Package directories are matched by their true on-disk casing, so `Flask`
+  and `flask` do not collide on case-insensitive filesystems.
+- Dotted names that the code itself uses as string literals, such as
+  setuptools entry-point groups, are not symbol claims.
+
+### Reporting
+
+Degradation is never silent. A missing git history, a disabled temporal
+gate, an empty documentation set and an undetected package each produce an
+explicit note, so a green run in the wrong directory cannot be mistaken
+for a clean repository.
