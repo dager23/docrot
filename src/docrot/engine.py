@@ -63,16 +63,35 @@ def run_check(config: Config) -> Report:
     commands = CommandResolver(build_inventory(sources), python, tracked)
 
     temporal_on = config.temporal != "off" and git.available
-    if config.temporal == "on" and not git.available:
-        notes.append("temporal gate requested but no git history is available")
+    if not git.available and config.temporal != "off":
+        # Never degrade silently: without history every verdict loses its
+        # drift-vs-fiction evidence, and the user must know that.
+        notes.append(
+            "no git history available: the temporal gate is off, so findings "
+            "are reported at medium confidence and carry no provenance"
+        )
+    elif config.temporal == "off":
+        notes.append("temporal gate disabled by configuration (medium confidence only)")
     if temporal_on and git.is_shallow:
         notes.append(
             "shallow clone: temporal evidence may be incomplete "
             "(use fetch-depth: 0 in CI for full provenance)"
         )
+    if not docs:
+        notes.append(f"no documentation files found under {config.root} — nothing to check")
+    if not packages:
+        notes.append(
+            "no Python package detected: symbol rules are inactive "
+            "(set [tool.docrot] packages = [...] if this is wrong)"
+        )
 
     pkg_dirs = {p.name: p.path.relative_to(config.root).as_posix() for p in packages}
-    gate = TemporalGate(git, HistoricalResolver(git, pkg_dirs), sources) if temporal_on else None
+    history_resolver = HistoricalResolver(git, pkg_dirs) if git.available else None
+    gate = (
+        TemporalGate(git, history_resolver, sources)
+        if temporal_on and history_resolver is not None
+        else None
+    )
 
     findings: list[Finding] = []
     unknowns: list[Resolution] = []
@@ -150,6 +169,24 @@ def run_check(config: Config) -> Report:
                 ref.kind is RefKind.SYMBOL_DOTTED
                 and ref.target.split(".")[0] in python.local_package_names
             )
+
+            if (
+                history == "refuted"
+                and local_symbol
+                and history_resolver is not None
+                and history_resolver.ever_resolved(ref.target)
+            ):
+                # It did not resolve when the line was written, but it existed
+                # earlier: the symbol was removed before this doc was authored.
+                # "Never existed" would be a false statement, and we cannot
+                # deterministically tell a stale copy-paste from prose that is
+                # deliberately discussing the removal. Stay silent.
+                resolution = Resolution(
+                    ref, Verdict.UNKNOWN, boundary="removed-before-doc-was-written"
+                )
+                unknowns.append(resolution)
+                history = "unavailable"
+                evidence = None
             finding = judge(resolution, evidence, config, local_symbol, history)
             if finding is not None:
                 if suppressions.matches(ref.line, finding.rule):

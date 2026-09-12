@@ -9,7 +9,7 @@ description = "Deterministic doc-to-code drift checker: finds references to symb
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Yash Shah" }]
+authors = [{ name = "dager", email = "yashdse23@gmail.com" }]
 keywords = [
     "documentation",
     "drift",
@@ -42,8 +42,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yshah-afk/docrot"
-Changelog = "https://github.com/yshah-afk/docrot/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/dager23/docrot"
+Repository = "https://github.com/dager23/docrot"
+Issues = "https://github.com/dager23/docrot/issues"
+Changelog = "https://github.com/dager23/docrot/blob/main/CHANGELOG.md"
 
 [project.scripts]
 docrot = "docrot.cli:main"

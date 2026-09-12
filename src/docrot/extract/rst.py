@@ -19,7 +19,9 @@ from pathlib import Path
 from docrot.extract.markdown import Extracted
 from docrot.model import RawSpan, SpanContext
 
-_ROLE = re.compile(r":(?P<role>[a-zA-Z][\w.:-]*):`(?P<body>[^`<\n]+?)(?:\s*<[^>]*>)?`")
+_ROLE = re.compile(r":(?P<role>[a-zA-Z][\w.:-]*):`(?P<body>[^`\n]+?)`")
+#: ``display text <the.real.target>`` — Sphinx's explicit-target form.
+_EXPLICIT_TARGET = re.compile(r"<([^<>\n]+)>\s*$")
 _LITERAL = re.compile(r"(?<!`)``(?P<body>[^`\n]+)``(?!`)")
 _INDENTED = re.compile(r"^(?:\s{3,}|\t)")
 
@@ -66,10 +68,19 @@ def extract_rst(doc: Path, text: str, in_agent_file: bool) -> Extracted:
 
         consumed: list[tuple[int, int]] = []
         for m in _ROLE.finditer(line):
-            body = m.group("body").strip().lstrip("~!")
             role = m.group("role").lower()
-            if role in _SYMBOL_ROLES or role in _FILE_ROLES:
-                inline_spans.append(RawSpan(doc, lineno0 + 1, m.start("body") + 1, body, ctx))
+            raw = m.group("body")
+            offset = m.start("body")
+            # `display text <actual.target>`: the target is the reference,
+            # the prose before it is only what the reader sees.
+            explicit = _EXPLICIT_TARGET.search(raw)
+            if explicit:
+                offset += explicit.start(1)
+                raw = explicit.group(1)
+            body = raw.strip().lstrip("~!")
+            offset += len(raw) - len(raw.lstrip())
+            if body and (role in _SYMBOL_ROLES or role in _FILE_ROLES):
+                inline_spans.append(RawSpan(doc, lineno0 + 1, offset + 1, body, ctx))
             consumed.append((m.start(), m.end()))
 
         for m in _LITERAL.finditer(line):

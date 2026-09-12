@@ -6,6 +6,7 @@ from docrot.model import RawSpan, Reference, RefKind, Verdict
 from docrot.resolve.commands import (
     TaskInventory,
     check_command,
+    inventory_from_texts,
     parse_just_recipes,
     parse_make_targets,
     parse_nox_sessions,
@@ -171,3 +172,91 @@ class TestCheckCommand:
 
     def test_unknown_runner(self) -> None:
         assert check_command("cargo build", self.INV, None).verdict is Verdict.UNKNOWN
+
+
+class TestRunnerCoverage:
+    """Every runner docrot claims to understand, exercised."""
+
+    INV = TaskInventory(
+        make_targets=frozenset({"test"}),
+        tox_envs=frozenset({"py312"}),
+        nox_sessions=frozenset({"tests"}),
+        npm_scripts=frozenset({"build"}),
+        just_recipes=frozenset({"deploy"}),
+        poe_tasks=frozenset({"lint"}),
+        pdm_scripts=frozenset({"serve"}),
+        entry_points=frozenset({"mytool"}),
+    )
+
+    def test_nox_session(self) -> None:
+        assert check_command("nox -s tests", self.INV, None).verdict is Verdict.RESOLVED
+        assert check_command("nox -s gone", self.INV, None).verdict is Verdict.BROKEN
+
+    def test_nox_without_session_is_unknown(self) -> None:
+        assert check_command("nox", self.INV, None).verdict is Verdict.UNKNOWN
+
+    def test_poe_task(self) -> None:
+        assert check_command("poe lint", self.INV, None).verdict is Verdict.RESOLVED
+        assert check_command("poe gone", self.INV, None).verdict is Verdict.BROKEN
+
+    def test_pdm_run_known_script(self) -> None:
+        assert check_command("pdm run serve", self.INV, None).verdict is Verdict.RESOLVED
+
+    def test_pdm_run_unknown_is_passthrough(self) -> None:
+        # pdm run also executes arbitrary commands: absence proves nothing
+        assert check_command("pdm run anything", self.INV, None).verdict is Verdict.UNKNOWN
+
+    def test_just_recipe(self) -> None:
+        assert check_command("just deploy", self.INV, None).verdict is Verdict.RESOLVED
+        assert check_command("just gone", self.INV, None).verdict is Verdict.BROKEN
+
+    def test_yarn_and_pnpm_run(self) -> None:
+        assert check_command("pnpm run build", self.INV, None).verdict is Verdict.RESOLVED
+        assert check_command("yarn run gone", self.INV, None).verdict is Verdict.BROKEN
+
+    def test_uv_run_entry_point(self) -> None:
+        assert check_command("uv run mytool", self.INV, None).verdict is Verdict.RESOLVED
+        assert check_command("uv run whatever", self.INV, None).verdict is Verdict.UNKNOWN
+
+    def test_tox_combined_short_flag(self) -> None:
+        assert check_command("tox -epy312", self.INV, None).verdict is Verdict.RESOLVED
+
+    def test_tox_without_env_is_unknown(self) -> None:
+        assert check_command("tox", self.INV, None).verdict is Verdict.UNKNOWN
+
+    def test_make_with_variable_assignment_ignored(self) -> None:
+        assert check_command("make test FOO=1", self.INV, None).verdict is Verdict.RESOLVED
+
+    def test_make_without_target_is_unknown(self) -> None:
+        assert check_command("make", self.INV, None).verdict is Verdict.UNKNOWN
+
+    def test_empty_command(self) -> None:
+        assert check_command("", self.INV, None).verdict is Verdict.UNKNOWN
+
+    def test_pytest_without_path(self) -> None:
+        assert check_command("pytest -q", self.INV, None).verdict is Verdict.UNKNOWN
+
+
+class TestInventoryFromTexts:
+    def test_builds_from_raw_blobs(self) -> None:
+        inv = inventory_from_texts(
+            {
+                "makefile": "build:\n\techo\n",
+                "tox_ini": "[tox]\nenvlist = py311\n",
+                "noxfile": "import nox\n@nox.session\ndef unit(s): ...\n",
+                "package_json": '{"scripts": {"dev": "x"}}',
+                "justfile": "run:\n  echo\n",
+                "pyproject": "[project.scripts]\nmine = 'a:b'\n",
+            }
+        )
+        assert inv.make_targets == frozenset({"build"})
+        assert inv.tox_envs == frozenset({"py311"})
+        assert inv.nox_sessions == frozenset({"unit"})
+        assert inv.npm_scripts == frozenset({"dev"})
+        assert "run" in (inv.just_recipes or frozenset())
+        assert inv.entry_points == frozenset({"mine"})
+
+    def test_absent_sources_stay_none(self) -> None:
+        inv = inventory_from_texts({"makefile": None})
+        assert inv.make_targets is None
+        assert inv.tox_envs is None

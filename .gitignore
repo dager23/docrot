@@ -10,3 +10,7 @@ build/
 .ruff_cache/
 .coverage
 coverage.xml
+
+# local design docs live outside the package
+PLAN.md
+research-deliverable.md

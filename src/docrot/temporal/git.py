@@ -178,6 +178,18 @@ class Git:
         )
         return proc.returncode == 0 and bool(proc.stdout.strip())
 
+    def pickaxe_commits(self, needle: str, path: str, limit: int = 6) -> list[str]:
+        """Commits where the occurrence count of `needle` changed under `path`.
+
+        Cheap way to find the handful of commits that could have introduced
+        or removed a name, without walking the whole history.
+        """
+        try:
+            out = self._run("log", f"--max-count={limit}", "--format=%H", "-S", needle, "--", path)
+        except GitError:
+            return []
+        return [line for line in out.splitlines() if line]
+
     def grep_worktree(self, fixed_string: str, path: str) -> bool:
         """True when `fixed_string` occurs in tracked files under `path`."""
         proc = subprocess.run(

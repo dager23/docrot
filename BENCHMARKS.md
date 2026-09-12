@@ -1,7 +1,7 @@
 # Benchmarks
 
 Verification of docrot against real open-source repositories, per the
-process in [PLAN.md](PLAN.md) §11. Run 2026-07-12 with docrot 0.1.0 on
+two-gate design described in the README. Run 2026-07-12 with docrot 0.1.0 on
 full-history clones (Windows 10, Python 3.13, subprocess git).
 
 Reproduce with:

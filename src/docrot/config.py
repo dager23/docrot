@@ -21,7 +21,25 @@ else:  # pragma: no cover - exercised only on 3.10
 from docrot.model import Severity
 
 #: Doc files that describe history are *supposed* to reference dead code.
-CHANGELOG_STEMS = ("changelog", "changes", "history", "news", "release", "releases")
+#: Migration and upgrade guides belong here for the same reason a changelog
+#: does: their whole job is to name the APIs that went away.
+HISTORICAL_DOC_STEMS = (
+    "changelog",
+    "changes",
+    "history",
+    "news",
+    "release",
+    "releases",
+    "migration",
+    "migrating",
+    "migrate",
+    "upgrade",
+    "upgrading",
+    "porting",
+    "breaking",
+    "deprecation",
+    "deprecations",
+)
 
 #: Agent context files get elevated treatment: agents act on their claims.
 AGENT_FILE_NAMES = (
@@ -49,7 +67,6 @@ _KNOWN_KEYS = {
     "external_packages",
     "ignore_refs",
     "strict",
-    "cache_dir",
 }
 
 
@@ -67,7 +84,6 @@ class Config:
     external_packages: tuple[str, ...] = ()
     ignore_refs: tuple[str, ...] = ()
     strict: bool = False
-    cache_dir: str = ".docrot_cache"
     show_unknown: bool = False
     changed_only: bool = False
     warnings: tuple[str, ...] = ()  # config-load warnings, surfaced in output
@@ -135,8 +151,6 @@ def _apply_table(cfg: Config, table: dict[str, Any], source: str) -> Config:
         updates["ignore_refs"] = tuple(table["ignore_refs"])
     if "strict" in table:
         updates["strict"] = bool(table["strict"])
-    if "cache_dir" in table:
-        updates["cache_dir"] = str(table["cache_dir"])
     return replace(cfg, **updates)
 
 

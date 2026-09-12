@@ -81,8 +81,29 @@ docrot --show-unknown   # audit what was skipped and why
 docrot explain PY002    # rule documentation
 ```
 
-Requires Python 3.10+ and git (degrades gracefully without history:
-only high-precision checks run, at reduced confidence).
+Requires Python 3.10+ and git. Without git history docrot still runs, but
+it says so and drops every finding to medium confidence, because the
+drift-versus-fiction evidence is exactly what history provides.
+
+### Command reference
+
+| Invocation | Effect |
+|---|---|
+| `docrot` / `docrot check` | check the whole repository (the default command) |
+| `docrot check docs/ README.md` | restrict the scan to those paths |
+| `docrot explain PY003` | what a rule means and how to suppress it |
+| `docrot anchors update` | recompute [anchor](#anchors) hashes after reviewing prose |
+
+| Flag | Effect |
+|---|---|
+| `--format text\|json\|sarif\|github` | output format (default `text`) |
+| `--rules core,agents,anchors` | enable only these rule packs |
+| `--fail-on error\|warning\|info` | lowest severity that fails the run |
+| `--strict` | medium-confidence findings also fail |
+| `--no-temporal` | skip the git gate (faster, lower confidence) |
+| `--show-unknown` | list every skipped reference and why |
+| `--changed-only` | only docs changed against HEAD (pre-commit mode) |
+| `--root PATH` | repository root (default: cwd) |
 
 ## Rules
 
@@ -110,14 +131,14 @@ counted in the report, never silent.
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0        # full history = full provenance
-- uses: yshah-afk/docrot@v0
+- uses: dager23/docrot@v0
 ```
 
 **pre-commit:**
 
 ```yaml
 repos:
-  - repo: https://github.com/yshah-afk/docrot
+  - repo: https://github.com/dager23/docrot
     rev: v0.1.0
     hooks:
       - id: docrot        # runs --changed-only for speed
@@ -129,7 +150,8 @@ error. Medium-confidence findings (no git history) fail only under
 
 ## Configuration
 
-Everything is optional — `[tool.docrot]` in `pyproject.toml`:
+Everything is optional. Use `[tool.docrot]` in `pyproject.toml`, or a
+standalone `docrot.toml` (same keys, no table header, takes precedence):
 
 ```toml
 [tool.docrot]
@@ -139,8 +161,15 @@ severity = { PATH002 = "ignore" }
 fail_on = "error"                    # error | warning | info
 temporal = "auto"                    # auto | on | off
 external_packages = ["werkzeug"]     # opt-in cross-package resolution
-ignore_refs = ["flask.request.*"]
+ignore_refs = ["flask.request.*"]     # glob-match references to skip
+docs = ["**/*.md", "**/*.rst"]       # what counts as a doc
+rules = { enable = ["core", "agents"], disable = ["LINK001"] }
+strict = false
 ```
+
+Unknown keys are reported and ignored rather than fatal. Changelogs,
+migration guides and upgrade notes are always skipped: naming removed
+APIs is their entire purpose.
 
 ## Anchors
 
@@ -172,8 +201,8 @@ an absent anchor asserts nothing.
 Alpha (0.x). Symbol resolution is Python-only; doc formats are Markdown,
 reStructuredText, and agent context files. Multi-language resolution
 (tree-sitter), CLI flag introspection, `--fix` rename suggestions, and an
-MCP server are on the [roadmap](PLAN.md). A 20-repo hand-labeled precision
-benchmark gates v1.0.
+MCP server are planned. Measured precision is published in
+[BENCHMARKS.md](BENCHMARKS.md).
 
 ## License
 

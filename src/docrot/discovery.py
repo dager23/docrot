@@ -18,7 +18,7 @@ if sys.version_info >= (3, 11):
 else:  # pragma: no cover
     import tomli as tomllib
 
-from docrot.config import AGENT_FILE_GLOBS, AGENT_FILE_NAMES, CHANGELOG_STEMS, Config
+from docrot.config import AGENT_FILE_GLOBS, AGENT_FILE_NAMES, HISTORICAL_DOC_STEMS, Config
 from docrot.globmatch import any_glob_match
 from docrot.temporal.git import Git
 
@@ -50,9 +50,11 @@ def is_agent_file(rel_posix: str) -> bool:
     return any_glob_match(rel_posix, AGENT_FILE_GLOBS)
 
 
-def _is_changelog(rel_posix: str) -> bool:
+def _is_historical_doc(rel_posix: str) -> bool:
+    """Changelogs, migration guides and the like: documents whose purpose
+    is to name APIs that no longer exist."""
     stem = PurePosixPath(rel_posix).stem.lower()
-    return any(stem.startswith(c) for c in CHANGELOG_STEMS)
+    return any(stem.startswith(c) for c in HISTORICAL_DOC_STEMS)
 
 
 def discover_docs(config: Config, git: Git) -> list[str]:
@@ -73,7 +75,7 @@ def discover_docs(config: Config, git: Git) -> list[str]:
             continue
         if not any_glob_match(rel, config.docs):
             continue
-        if _is_changelog(rel):
+        if _is_historical_doc(rel):
             continue
         if any_glob_match(rel, config.exclude_docs):
             continue

@@ -4,12 +4,14 @@ public API and the CLI."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from tests.conftest import GitRepo
 
 import docrot
 from docrot.cli import main
+from docrot.model import Confidence
 
 
 @pytest.fixture
@@ -131,6 +133,103 @@ def test_no_temporal_mode_degrades(drifted_repo: GitRepo) -> None:
     rules = {f.rule for f in report.findings}
     assert "PY002" not in rules
     assert "PY001" in rules
+
+
+class TestNeverExistedIsProvable:
+    """PY003 claims a symbol *never existed*. That must be provable.
+
+    Regression for the anthropic-sdk-python false positives: 13 symbols in
+    MIGRATION.md were reported as never having existed when they had been
+    exported for years and removed in the very commit that wrote the guide.
+    """
+
+    def test_symbol_removed_before_doc_was_written_is_not_flagged(self, git_repo: GitRepo) -> None:
+        git_repo.commit(
+            {
+                "pyproject.toml": "[project]\nname = 'demo'\nversion = '0'\n",
+                "demo/__init__.py": "from demo.core import Legacy\n",
+                "demo/core.py": "class Legacy:\n    pass\n",
+            },
+            "Legacy exists",
+        )
+        git_repo.commit(
+            {"demo/__init__.py": "\n", "demo/core.py": "class Modern:\n    pass\n"},
+            "remove Legacy",
+        )
+        # the doc line is authored *after* the removal
+        git_repo.commit(
+            {"NOTES.md": "The old `demo.Legacy` class handled this.\n"},
+            "write notes referencing the removed class",
+        )
+        report = docrot.check(git_repo.root)
+        assert not [f for f in report.findings if f.rule == "PY003"]
+        assert any(r.boundary == "removed-before-doc-was-written" for r in report.unknowns), (
+            "should be recorded as unverifiable, not silently dropped"
+        )
+
+    def test_symbol_that_truly_never_existed_is_still_flagged(self, git_repo: GitRepo) -> None:
+        # contrast case: the httpx.Mounts shape must keep firing
+        git_repo.commit(
+            {
+                "pyproject.toml": "[project]\nname = 'demo'\nversion = '0'\n",
+                "demo/__init__.py": "from demo.core import Modern\n",
+                "demo/core.py": "class Modern:\n    pass\n",
+                "NOTES.md": "Use `demo.Imaginary` for this.\n",
+            },
+            "document an API that was never built",
+        )
+        report = docrot.check(git_repo.root)
+        assert any(f.rule == "PY003" and f.ref.target == "demo.Imaginary" for f in report.findings)
+
+    def test_migration_guides_are_historical_docs(self, git_repo: GitRepo) -> None:
+        git_repo.commit(
+            {
+                "pyproject.toml": "[project]\nname = 'demo'\nversion = '0'\n",
+                "demo/__init__.py": "\n",
+                "MIGRATION.md": "`demo.OldThing` was removed; use `demo.NewThing`.\n",
+                "UPGRADING.md": "`demo.AlsoGone` is no longer exported.\n",
+            },
+            "migration guides name APIs that are gone, by design",
+        )
+        report = docrot.check(git_repo.root)
+        assert report.findings == ()
+
+
+def test_degraded_modes_are_announced() -> None:
+    """Never degrade silently: the user must be told why confidence dropped."""
+    import shutil
+    import tempfile
+
+    from docrot.config import load_config
+    from docrot.engine import run_check
+
+    # An independent location: a directory nested inside a git fixture would
+    # still resolve to that parent repository.
+    workdir = Path(tempfile.mkdtemp(prefix="docrot-nogit-"))
+    try:
+        (workdir / "demo").mkdir()
+        (workdir / "pyproject.toml").write_text(
+            "[project]\nname = 'demo'\nversion = '0'\n", encoding="utf-8"
+        )
+        (workdir / "demo" / "__init__.py").write_text("\n", encoding="utf-8")
+        (workdir / "README.md").write_text("Use `demo.missing_thing`.\n", encoding="utf-8")
+        report = run_check(load_config(workdir))
+        assert any("no git history" in n for n in report.notes)
+        # and the finding it does report is explicitly lower confidence
+        assert all(f.confidence is not Confidence.HIGH for f in report.findings)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def test_empty_target_is_not_silently_green(tmp_path: Path) -> None:
+    from docrot.config import load_config
+    from docrot.engine import run_check
+
+    (tmp_path / "src").mkdir()
+    report = run_check(load_config(tmp_path))
+    assert report.summary.findings == 0
+    assert any("no documentation files found" in n for n in report.notes)
+    assert any("no Python package detected" in n for n in report.notes)
 
 
 def test_untracked_agent_file_still_checked(drifted_repo: GitRepo) -> None:

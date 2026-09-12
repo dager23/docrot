@@ -231,6 +231,30 @@ class HistoricalResolver:
         # class-scoped / bare references: definition-level grep evidence
         return self._grep_definition(commit, parts[-1], class_hint=head)
 
+    def ever_resolved(self, target: str, limit: int = 6) -> bool:
+        """Did `target` ever resolve at any point in the project's history?
+
+        Guards the "has never existed" claim. The temporal gate only probes
+        the commit where a doc line was written, so a symbol that was
+        removed *before* the line was authored (a migration guide, a
+        copy-pasted snippet) would otherwise be reported as never having
+        existed — a factually false statement.
+
+        Uses git's pickaxe to find the few commits where the terminal name
+        appeared or disappeared, then probes each of those commits and its
+        parent. Returns True as soon as one of them resolves.
+        """
+        name = target.split(".")[-1]
+        if not name:
+            return False
+        for pkg_dir in self.package_dirs.values():
+            for commit in self.git.pickaxe_commits(name, pkg_dir, limit):
+                # a removal commit no longer has the symbol; its parent does
+                for probe in (commit, f"{commit}^"):
+                    if self.symbol_resolved_at(probe, target):
+                        return True
+        return False
+
     def _grep_definition(self, commit: str, name: str, class_hint: str | None = None) -> bool:
         """`git grep` for definition-level existed-then evidence.
 

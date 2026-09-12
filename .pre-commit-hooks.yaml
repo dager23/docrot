@@ -1,7 +1,7 @@
 # Use in downstream repos:
 #
 #   repos:
-#     - repo: https://github.com/yshah-afk/docrot
+#     - repo: https://github.com/dager23/docrot
 #       rev: v0.1.0
 #       hooks:
 #         - id: docrot

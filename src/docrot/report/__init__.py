@@ -151,7 +151,7 @@ def render_sarif(report: Report, out: TextIO = sys.stdout) -> None:
                 "tool": {
                     "driver": {
                         "name": "docrot",
-                        "informationUri": "https://github.com/yshah-afk/docrot",
+                        "informationUri": "https://github.com/dager23/docrot",
                         "rules": [
                             {
                                 "id": r.id,
