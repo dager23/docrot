@@ -68,8 +68,11 @@ jobs:
           /tmp/wheel-env/bin/python - <<'PY'
           import importlib.metadata as md
           installed = {d.metadata["Name"].lower() for d in md.distributions()}
-          expected = {"docrot", "griffe", "markdown-it-py", "mdurl", "pip", "colorama"}
-          extra = installed - expected
+          # docrot plus its declared dependencies and their own closure
+          expected = {"docrot", "griffe", "markdown-it-py", "mdurl", "colorama"}
+          # whatever the interpreter seeds a fresh venv with is not ours
+          seeded = {"pip", "setuptools", "wheel", "pkg_resources"}
+          extra = installed - expected - seeded
           assert not extra, f"unexpected packages pulled in: {sorted(extra)}"
           print("dependency closure:", sorted(installed))
           PY
