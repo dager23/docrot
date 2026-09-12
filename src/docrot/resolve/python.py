@@ -89,6 +89,10 @@ class PythonResolver:
     def local_package_names(self) -> frozenset[str]:
         return frozenset(self._modules)
 
+    def top_level_module(self, name: str) -> griffe.Module | None:
+        """The loaded package root, for callers that want to enumerate it."""
+        return self._modules.get(name)
+
     def module_exists(self, dotted: str) -> Verdict:
         """For `python -m <dotted>` validation."""
         parts = dotted.split(".")

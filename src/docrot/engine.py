@@ -149,8 +149,12 @@ def run_check(config: Config) -> Report:
             history: History = "unavailable"
             evidence = None
             if resolution.verdict is Verdict.BROKEN and gate is not None:
-                scope = _scope_for(ref, pkg_dirs)
-                evidence = gate.examine(ref, scope)
+                # probe history as whatever we actually resolved it *as*:
+                # a path-like dotted name is checked against the tree, not
+                # against the symbol index
+                probe = resolution.ref
+                scope = _scope_for(probe, pkg_dirs)
+                evidence = gate.examine(probe, scope)
                 if evidence is not None:
                     history = "confirmed" if evidence.resolved_at_introduction else "refuted"
             elif (
@@ -242,6 +246,10 @@ def _resolve(
     if ref.kind in (RefKind.SYMBOL_DOTTED, RefKind.SYMBOL_CALL):
         resolution = python.resolve(ref)
         if resolution.verdict is not Verdict.RESOLVED and path_fallback_eligible(ref):
+            # `settings.json` parses as a dotted symbol but may well be a
+            # file. If it resolves as one, say so; if it resolves as
+            # neither, hand it on as a *path* candidate so the temporal
+            # gate can decide whether a documented file was deleted.
             as_path = paths.resolve(Reference(ref.span, RefKind.PATH, ref.target))
             if as_path.verdict is Verdict.RESOLVED:
                 return Resolution(
@@ -250,6 +258,8 @@ def _resolve(
                     resolved_as=as_path.resolved_as,
                     boundary="as-path",
                 )
+            if as_path.verdict is Verdict.BROKEN and resolution.verdict is Verdict.UNKNOWN:
+                return as_path
         return resolution
     if ref.kind is RefKind.LINK:
         # markdown links resolve relative to the containing document first

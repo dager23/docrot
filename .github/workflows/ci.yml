@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 
 jobs:
@@ -16,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # docrot's own temporal tests need history
+          fetch-depth: 0 # docrot's own temporal tests need real history
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
@@ -24,22 +25,66 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Lint
         run: |
-          python -m ruff check src tests
-          python -m ruff format --check src tests
+          python -m ruff check src tests scripts
+          python -m ruff format --check src tests scripts
       - name: Type-check
         run: python -m mypy
       - name: Test
         run: python -m pytest --cov=docrot --cov-fail-under=85 -q
-      - name: Dogfood
+      - name: Dogfood (docrot checks its own docs)
         run: python -m docrot.cli check --strict
+
+  package:
+    # A green test suite says nothing about what a stranger installs, so
+    # build both artifacts and exercise the CLI from each in a clean venv.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install build
+          python -m build
+      - name: Install from the wheel and run it
+        run: |
+          python -m venv /tmp/wheel-env
+          /tmp/wheel-env/bin/python -m pip install --quiet dist/*.whl
+          /tmp/wheel-env/bin/docrot --version
+          /tmp/wheel-env/bin/docrot explain PY003
+          /tmp/wheel-env/bin/docrot check --root . --format sarif > /dev/null
+      - name: Install from the sdist and run it
+        # sdists can omit files a wheel happens to carry; test both
+        run: |
+          python -m venv /tmp/sdist-env
+          /tmp/sdist-env/bin/python -m pip install --quiet dist/*.tar.gz
+          /tmp/sdist-env/bin/docrot --version
+          /tmp/sdist-env/bin/docrot check --root . --format json > /dev/null
+      - name: Declared dependencies are the installed ones
+        run: |
+          /tmp/wheel-env/bin/python - <<'PY'
+          import importlib.metadata as md
+          installed = {d.metadata["Name"].lower() for d in md.distributions()}
+          expected = {"docrot", "griffe", "markdown-it-py", "mdurl", "pip", "colorama"}
+          extra = installed - expected
+          assert not extra, f"unexpected packages pulled in: {sorted(extra)}"
+          print("dependency closure:", sorted(installed))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: test
+    needs: [test, package]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write  # PyPI trusted publishing
+      id-token: write # PyPI trusted publishing: no API token is stored
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
