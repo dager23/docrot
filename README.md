@@ -1,5 +1,10 @@
 # docrot
 
+[![CI](https://github.com/dager23/docrot/actions/workflows/ci.yml/badge.svg)](https://github.com/dager23/docrot/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/docrot.svg)](https://pypi.org/project/docrot/)
+[![Python versions](https://img.shields.io/pypi/pyversions/docrot.svg)](https://pypi.org/project/docrot/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **Deterministic doc↔code drift checker for Python repositories.**
 
 docrot finds references in your prose documentation — READMEs, `docs/`,
