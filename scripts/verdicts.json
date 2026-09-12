@@ -1,0 +1,39 @@
+{
+  "_comment": "Manual triage of every finding the corpus run reported. Each was checked against that project's own git history and source tree by hand; the corpus harness does not produce these labels. Keyed by repo and target.",
+  "arrow:arrow.locale": {
+    "verdict": "true positive",
+    "note": "the module is arrow/locales.py (plural); no arrow/locale.py has ever existed"
+  },
+  "griffe:devdeps.txt": {
+    "verdict": "true positive",
+    "note": "existed at a5ef8eb (2024-07-10), removed in 48ad843 (2024-10-11); the guide still points at it"
+  },
+  "httpx:httpx.Mounts": {
+    "verdict": "true positive",
+    "note": "documented with a full usage example since 3faa4a8 (2024-02-14); no such class in any commit"
+  },
+  "jinja:Environment.call": {
+    "verdict": "true positive",
+    "note": "explicit cross-reference target; Environment defines call_filter and call_test but no call"
+  },
+  "rich:rich.ScreenContext.update": {
+    "verdict": "true positive",
+    "note": "ScreenContext is never exported from the rich package root; it lives at rich.console.ScreenContext"
+  },
+  "rich:rich.console.Print.print": {
+    "verdict": "true positive",
+    "note": "no Print class exists in rich.console; Console.print was meant. Two occurrences"
+  },
+  "structlog:structlog.stdlib._NAME_TO_LEVEL": {
+    "verdict": "true positive",
+    "note": "the mapping moved to structlog._log_levels; structlog's own docstring says so"
+  },
+  "werkzeug:Request.make_conditional": {
+    "verdict": "true positive",
+    "note": "make_conditional is defined on Response, not Request"
+  },
+  "werkzeug:werkzeug.exceptions.RequestRedirect": {
+    "verdict": "true positive",
+    "note": "RequestRedirect lives in werkzeug.routing.exceptions and is not re-exported into werkzeug.exceptions"
+  }
+}

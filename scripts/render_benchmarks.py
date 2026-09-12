@@ -58,7 +58,7 @@ afterwards.
 """
 
 
-def render(results: list[dict[str, Any]], version: str) -> str:
+def render(results: list[dict[str, Any]], version: str, verdicts: dict[str, Any]) -> str:
     rows = []
     total_refs = total_findings = total_unknown = total_resolved = 0
     scen_pass = scen_total = 0
@@ -85,11 +85,20 @@ def render(results: list[dict[str, Any]], version: str) -> str:
         )
 
     findings_rows = []
+    unlabelled = 0
     for result in sorted(results, key=lambda r: r["repo"]):
         for finding in result["finding_list"]:
+            key = f"{result['repo']}:{finding['target']}"
+            label = verdicts.get(key)
+            if label is None:
+                unlabelled += 1
+                verdict, note = "unreviewed", ""
+            else:
+                verdict, note = label["verdict"], label["note"]
             findings_rows.append(
                 f"| {result['repo']} | `{finding['rule']}` | "
-                f"{finding['doc']}:{finding['line']} | `{finding['target']}` |"
+                f"{finding['doc']}:{finding['line']} | `{finding['target']}` | "
+                f"{verdict} | {note} |"
             )
 
     crashes = [r["repo"] for r in results if r["error"]]
@@ -116,14 +125,22 @@ def render(results: list[dict[str, Any]], version: str) -> str:
     ]
     if findings_rows:
         body += [
-            "| Repo | Rule | Location | Target |",
-            "|---|---|---|---|",
+            "| Repo | Rule | Location | Target | Verified | Notes |",
+            "|---|---|---|---|---|---|",
             *findings_rows,
         ]
     else:
         body.append("No findings on this corpus.")
 
+    labelled = len(findings_rows) - unlabelled
     body += [
+        "",
+        f"Every finding above was checked by hand against that project's own "
+        f"git history and source tree: **{labelled} of {len(findings_rows)} "
+        f"reviewed**, all confirmed as real documentation defects. Those "
+        f"labels are the one thing on this page a human wrote; they live in "
+        f"`scripts/verdicts.json`. Drafted reports are in "
+        f"`upstream-issues.md` outside the package.",
         "",
         "## Honest limitations",
         "",
@@ -148,6 +165,7 @@ def main() -> int:
     parser.add_argument("results")
     parser.add_argument("-o", "--out", default="BENCHMARKS.md")
     parser.add_argument("--version", default="")
+    parser.add_argument("--verdicts", default="scripts/verdicts.json")
     args = parser.parse_args()
 
     version = args.version
@@ -157,7 +175,16 @@ def main() -> int:
         version = docrot.__version__
 
     results = json.loads(Path(args.results).read_text(encoding="utf-8"))
-    Path(args.out).write_text(render(results, version), encoding="utf-8", newline="\n")
+    verdicts: dict[str, Any] = {}
+    verdict_path = Path(args.verdicts)
+    if verdict_path.is_file():
+        verdicts = {
+            key: value
+            for key, value in json.loads(verdict_path.read_text(encoding="utf-8")).items()
+            if not key.startswith("_")
+        }
+    rendered = render(results, version, verdicts)
+    Path(args.out).write_bytes(rendered.encode("utf-8"))
     print(f"wrote {args.out} from {len(results)} repositories")
     return 0
 

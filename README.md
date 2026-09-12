@@ -207,8 +207,12 @@ an absent anchor asserts nothing.
 Alpha (0.x). Symbol resolution is Python-only; doc formats are Markdown,
 reStructuredText, and agent context files. Multi-language resolution
 (tree-sitter), CLI flag introspection, `--fix` rename suggestions, and an
-MCP server are planned. Measured precision is published in
-[BENCHMARKS.md](BENCHMARKS.md).
+MCP server are planned.
+
+Measured against 25 mature open-source projects: 6,073 references
+checked, 10 findings, every one confirmed by hand as a real
+documentation defect, and 139 of 139 seeded scenarios correct. The
+numbers and the method are in [BENCHMARKS.md](BENCHMARKS.md).
 
 ## License
 
