@@ -36,7 +36,7 @@ NEVER_EXISTED = "DocrotProbeNeverExisted"
 PROBE_ASSET = "docrot_probe_asset.txt"
 
 
-def run_docrot(repo: Path, *args: str) -> tuple[int, str]:
+def run_docrot(repo: Path, *args: str) -> tuple[int, str, str]:
     proc = subprocess.run(
         [sys.executable, "-m", "docrot.cli", "check", "--root", str(repo), *args],
         capture_output=True,
@@ -45,13 +45,15 @@ def run_docrot(repo: Path, *args: str) -> tuple[int, str]:
         errors="replace",
         cwd=repo,
     )
-    return proc.returncode, proc.stdout + proc.stderr
+    return proc.returncode, proc.stdout, proc.stderr
 
 
 def docrot_json(repo: Path, *args: str) -> dict[str, Any]:
-    code, out = run_docrot(repo, "--format", "json", *args)
+    # parse stdout alone: machine-readable output must never be mixed with
+    # whatever a library decided to log
+    code, out, err = run_docrot(repo, "--format", "json", *args)
     if code not in (0, 1):
-        raise RuntimeError(f"docrot exited {code}: {out[:400]}")
+        raise RuntimeError(f"docrot exited {code}: {(err or out)[:400]}")
     payload: dict[str, Any] = json.loads(out)
     return payload
 
@@ -129,6 +131,14 @@ def probe_findings(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [f for f in payload["findings"] if f["doc"] == PROBE_DOC and not f["suppressed"]]
 
 
+def _write_probe(repo: Path, pkg: str, real: str) -> dict[str, Any]:
+    (repo / PROBE_DOC).write_text(
+        f"# docrot probe\n\nReal export: `{pkg}.{real}`.\n", encoding="utf-8"
+    )
+    commit(repo, "docrot probe: a real export")
+    return docrot_json(repo)
+
+
 def _symbol_scenarios(repo: Path, pkg: str, real: str) -> list[Scenario]:
     (repo / PROBE_DOC).write_text(
         f"# docrot probe\n\n"
@@ -182,7 +192,22 @@ def _drift_scenarios(repo: Path, pkg: str, pkg_dir: str, real: str) -> list[Scen
             Scenario("true-positive-drift", "export line removable", True, "skipped: star-export")
         ]
 
+    original = "".join(lines)
     init.write_text("".join(kept), encoding="utf-8")
+    try:
+        compile(init.read_text(encoding="utf-8", errors="replace"), str(init), "exec")
+    except SyntaxError:
+        # deleting the line left an orphaned block; that would test the
+        # parser, not the drift gate
+        init.write_text(original, encoding="utf-8")
+        return [
+            Scenario(
+                "true-positive-drift",
+                "export line removable without breaking the module",
+                True,
+                "skipped: removal would not parse",
+            )
+        ]
     commit(repo, f"docrot probe: remove the {real} export")
     if _still_resolves(repo, f"{pkg}.{real}"):
         # star-imports and re-export shims can keep a name reachable after
@@ -261,6 +286,21 @@ def _command_scenarios(repo: Path) -> list[Scenario]:
         return []
     real_target = targets[0]
 
+    from docrot.resolve.commands import parse_make_targets
+
+    _, opaque = parse_make_targets(text)
+    if opaque:
+        # computed target names mean the list cannot be enumerated, so
+        # docrot reports UNKNOWN rather than guessing
+        return [
+            Scenario(
+                "true-negative-command",
+                "an opaque Makefile produces no command findings",
+                True,
+                "skipped: computed targets",
+            )
+        ]
+
     (repo / PROBE_DOC).write_text(f"Run `make {real_target}` to build.\n", encoding="utf-8")
     commit(repo, "docrot probe: document a real make target")
     flagged = {f["target"] for f in probe_findings(docrot_json(repo))}
@@ -293,10 +333,51 @@ def _command_scenarios(repo: Path) -> list[Scenario]:
     return scenarios
 
 
+def _is_dynamic_root(repo: Path, pkg: str) -> bool:
+    """Can this package conjure names at runtime?
+
+    Asked of the resolver rather than the source text: attrs writes
+    `__getattr__ = _make_getattr(__name__)`, which no grep for `def
+    __getattr__` will find. When the namespace is dynamic, absence cannot
+    be proven and docrot is right to stay silent.
+    """
+    from docrot.config import load_config
+    from docrot.discovery import discover_packages
+    from docrot.model import RawSpan, Reference, RefKind, Verdict
+    from docrot.resolve.python import PythonResolver
+
+    resolver = PythonResolver(discover_packages(load_config(repo)))
+    target = f"{pkg}.{NEVER_EXISTED}"
+    ref = Reference(RawSpan(Path(PROBE_DOC), 1, 1, target), RefKind.SYMBOL_DOTTED, target)
+    result = resolver.resolve(ref)
+    return result.verdict is Verdict.UNKNOWN and (result.boundary or "").startswith("dynamic")
+
+
 def seed_scenarios(repo: Path, pkg: str, pkg_dir: str, exported: list[str]) -> list[Scenario]:
     if not pkg or not exported:
         return [Scenario("package-facts", "a package with exports", False, "none detected")]
     real = exported[0]
+    if _is_dynamic_root(repo, pkg):
+        scenarios = [
+            Scenario(
+                "true-negative-symbol",
+                f"`{pkg}.{real}`, really exported, is not flagged",
+                not [
+                    f
+                    for f in probe_findings(_write_probe(repo, pkg, real))
+                    if f["target"] == f"{pkg}.{real}"
+                ],
+            ),
+            Scenario(
+                "absence-unprovable",
+                "a package root defining __getattr__ yields no symbol findings",
+                True,
+                "skipped: dynamic namespace",
+            ),
+        ]
+        scenarios += _path_scenarios(repo)
+        scenarios += _command_scenarios(repo)
+        return scenarios
     scenarios = _symbol_scenarios(repo, pkg, real)
     scenarios += _drift_scenarios(repo, pkg, pkg_dir, real)
     scenarios += _path_scenarios(repo)
@@ -310,11 +391,11 @@ def check_repo(repo: Path) -> RepoResult:
     result.head = original[:10]
     try:
         for fmt in ("text", "json", "sarif", "github"):
-            code, out = run_docrot(repo, "--format", fmt)
+            code, out, err = run_docrot(repo, "--format", fmt)
             if code not in (0, 1):
-                raise RuntimeError(f"--format {fmt} exited {code}: {out[:300]}")
-            if "Traceback" in out:
-                raise RuntimeError(f"--format {fmt} raised: {out[:300]}")
+                raise RuntimeError(f"--format {fmt} exited {code}: {(err or out)[:300]}")
+            if "Traceback" in out or "Traceback" in err:
+                raise RuntimeError(f"--format {fmt} raised: {(err or out)[:300]}")
         for fmt in ("json", "sarif"):
             json.loads(run_docrot(repo, "--format", fmt)[1])
 

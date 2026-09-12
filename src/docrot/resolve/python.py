@@ -21,6 +21,20 @@ from docrot.model import Reference, Resolution, Verdict
 logger = logging.getLogger(__name__)
 
 
+def _quiet_griffe() -> None:
+    """Keep griffe's own logging off the terminal.
+
+    A package that fails to parse is reported as a docrot note on stdout;
+    a library traceback on stderr adds nothing and corrupts the output of
+    anyone piping both streams.
+    """
+    griffe_logger = logging.getLogger("griffe")
+    griffe_logger.setLevel(logging.CRITICAL)
+    griffe_logger.propagate = False
+    if not griffe_logger.handlers:
+        griffe_logger.addHandler(logging.NullHandler())
+
+
 class _Dynamic(Exception):
     """Resolution crossed a boundary we cannot analyze statically."""
 
@@ -39,17 +53,31 @@ class PythonResolver:
         self._by_module_basename: dict[str, list[griffe.Module]] = defaultdict(list)
         self._callables: set[str] = set()
         self.load_errors: list[str] = []
+        _quiet_griffe()
 
         search_paths = list({str(p.search_path) for p in packages})
         loader = griffe.GriffeLoader(search_paths=search_paths)
-        for pkg in packages:
-            try:
-                mod = loader.load(pkg.name)
-            except Exception as exc:  # loading must never break a run
-                self.load_errors.append(f"{pkg.name}: {exc}")
-                continue
-            if isinstance(mod, griffe.Module):
-                self._modules[pkg.name] = mod
+        # Two passes: a package that re-exports from a sibling (attrs from
+        # attr) fails if it is loaded first, and succeeds once the sibling
+        # is in the loader. Only a second failure is a real error.
+        pending = list(packages)
+        for final_pass in (False, True):
+            failed: list[tuple[PackageRoot, Exception]] = []
+            for pkg in pending:
+                if pkg.name in self._modules:
+                    continue
+                try:
+                    mod = loader.load(pkg.name)
+                except Exception as exc:  # loading must never break a run
+                    failed.append((pkg, exc))
+                    continue
+                if isinstance(mod, griffe.Module):
+                    self._modules[pkg.name] = mod
+            if not failed:
+                break
+            if final_pass:
+                self.load_errors.extend(f"{pkg.name}: {exc}" for pkg, exc in failed)
+            pending = [pkg for pkg, _ in failed]
         for name in external_packages:
             if name in self._modules:
                 continue

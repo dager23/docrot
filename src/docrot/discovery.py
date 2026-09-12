@@ -116,6 +116,21 @@ def _read_toml(path: Path) -> dict[str, Any]:
         return {}
 
 
+def _candidate_bases(root: Path) -> list[Path]:
+    """Directories that may hold a package: flat, src layout, or a
+    monorepo that keeps each distribution under ``packages/``."""
+    bases = [root, root / "src"]
+    container = root / "packages"
+    if container.is_dir():
+        try:
+            children = sorted(c for c in container.iterdir() if c.is_dir())
+        except OSError:
+            children = []
+        for child in children:
+            bases += [child, child / "src"]
+    return [b for b in bases if b.is_dir()]
+
+
 def _package_dir(root: Path, name: str) -> Path | None:
     """Locate the package directory, returning its *true on-disk casing*.
 
@@ -125,7 +140,7 @@ def _package_dir(root: Path, name: str) -> Path | None:
     named Flask that git (case-sensitive) can never see.
     """
     mod = name.replace("-", "_")
-    for base in (root, root / "src"):
+    for base in _candidate_bases(root):
         if not (base / mod / "__init__.py").is_file():
             continue
         try:
@@ -177,9 +192,7 @@ def discover_packages(config: Config) -> list[PackageRoot]:
 
     if not roots:
         # last resort: scan for top-level packages
-        for base in (root, root / "src"):
-            if not base.is_dir():
-                continue
+        for base in _candidate_bases(root):
             for child in sorted(base.iterdir()):
                 if (
                     child.is_dir()
