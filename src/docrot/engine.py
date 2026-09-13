@@ -78,7 +78,10 @@ def run_check(config: Config) -> Report:
             "(use fetch-depth: 0 in CI for full provenance)"
         )
     if not docs:
-        notes.append(f"no documentation files found under {config.root} — nothing to check")
+        if config.changed_only:
+            notes.append("no documentation changed relative to HEAD")
+        else:
+            notes.append(f"no documentation files found under {config.root}, nothing to check")
     if not packages:
         notes.append(
             "no Python package detected: symbol rules are inactive "

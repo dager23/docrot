@@ -229,6 +229,9 @@ def test_empty_target_is_not_silently_green(tmp_path: Path) -> None:
     report = run_check(load_config(tmp_path))
     assert report.summary.findings == 0
     assert any("no documentation files found" in n for n in report.notes)
+    assert all(ord(ch) < 128 for n in report.notes for ch in n), (
+        "notes must stay ASCII: Windows terminals render em-dashes as mojibake"
+    )
     assert any("no Python package detected" in n for n in report.notes)
 
 
